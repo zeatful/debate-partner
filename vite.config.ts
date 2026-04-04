@@ -7,6 +7,10 @@ export default defineConfig({
 	optimizeDeps: {
 		exclude: ['@mlc-ai/web-llm', 'kokoro-js']
 	},
+	build: {
+		// WebLLM and Kokoro WASM are intentionally large — suppress the noise
+		chunkSizeWarningLimit: 25000
+	},
 	server: {
 		headers: {
 			'Cross-Origin-Embedder-Policy': 'require-corp',

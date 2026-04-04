@@ -5,6 +5,7 @@
 	import { llm } from '$lib/llm.svelte.js';
 	import { speech } from '$lib/speech.svelte.js';
 	import LoadingScreen from '$lib/components/LoadingScreen.svelte';
+	import JudgingScreen from '$lib/components/JudgingScreen.svelte';
 	import VoiceButton from '$lib/components/VoiceButton.svelte';
 	import TranscriptEntry from '$lib/components/TranscriptEntry.svelte';
 
@@ -127,32 +128,30 @@
 </script>
 
 <!-- Loading overlay -->
-{#if debate.phase === 'loading' || (debate.phase === 'judging' && !debate.verdict)}
-	<LoadingScreen
-		progress={debate.phase === 'judging' ? 90 : llm.loadProgress}
-		status={debate.phase === 'judging' ? 'Deliberating...' : llm.loadStatus}
-		label={debate.phase === 'judging' ? 'Judging' : 'Loading Model'}
-	/>
+{#if debate.phase === 'loading'}
+	<LoadingScreen progress={llm.loadProgress} status={llm.loadStatus} label="Loading Model" />
+{:else if debate.phase === 'judging' && !debate.verdict}
+	<JudgingScreen />
 {/if}
 
-<div class="flex h-screen flex-col" style="background: #060606;">
+<div class="flex h-screen flex-col" style="background: var(--canvas-bg);">
 	<!-- Header -->
 	<header
 		class="flex-shrink-0 px-6 py-4"
-		style="border-bottom: 1px solid rgba(255,255,255,0.05);"
+		style="border-bottom: 1px solid var(--border-color);"
 	>
 		<div class="mx-auto flex max-w-2xl items-center justify-between gap-4">
 			<!-- Topic -->
 			<div class="min-w-0 flex-1">
 				<p
 					class="mb-0.5 text-[10px] tracking-[0.3em] uppercase"
-					style="color: rgba(237,232,222,0.50); font-family: var(--font-mono);"
+					style="color: rgba(var(--ink),0.60); font-family: var(--font-mono);"
 				>
 					Proposition
 				</p>
 				<p
 					class="truncate text-sm"
-					style="color: rgba(237,232,222,0.90); font-family: var(--font-display); font-style: italic; font-size: 1rem;"
+					style="color: rgba(var(--ink),0.92); font-family: var(--font-display); font-style: italic; font-size: 1rem;"
 				>
 					"{debate.topic}"
 				</p>
@@ -163,30 +162,30 @@
 				<div class="text-right">
 					<p
 						class="text-[10px] tracking-[0.25em] uppercase"
-						style="color: rgba(232,184,75,0.5); font-family: var(--font-mono);"
+						style="color: rgba(var(--user-color),0.75); font-family: var(--font-mono);"
 					>
 						You · {debate.userSide === 'for' ? 'FOR' : 'AGAINST'}
 					</p>
 					<p
 						class="text-[10px] tracking-[0.25em] uppercase"
-						style="color: rgba(125,211,252,0.5); font-family: var(--font-mono);"
+						style="color: rgba(var(--ai-color),0.75); font-family: var(--font-mono);"
 					>
 						AI · {debate.aiSide === 'for' ? 'FOR' : 'AGAINST'}
 					</p>
 				</div>
 				<div
 					class="px-3 py-2 text-center"
-					style="border: 1px solid rgba(255,255,255,0.07);"
+					style="border: 1px solid var(--border-color);"
 				>
 					<p
 						class="text-xs tabular-nums"
-						style="color: rgba(237,232,222,0.65); font-family: var(--font-mono);"
+						style="color: rgba(var(--ink),0.80); font-family: var(--font-mono);"
 					>
 						{roundLabel}
 					</p>
 					<p
 						class="text-[9px] tracking-widest uppercase"
-						style="color: rgba(237,232,222,0.45); font-family: var(--font-mono);"
+						style="color: rgba(var(--ink),0.55); font-family: var(--font-mono);"
 					>
 						rounds
 					</p>
@@ -207,16 +206,16 @@
 					class="flex flex-col items-center justify-center py-24 text-center"
 					style="animation: fade-in 0.6s ease-out 0.3s both;"
 				>
-					<div class="mb-6 h-px w-8" style="background: rgba(232,184,75,0.25);"></div>
+					<div class="mb-6 h-px w-8" style="background: rgba(var(--user-color),0.25);"></div>
 					<p
 						class="text-2xl font-light italic"
-						style="font-family: var(--font-display); color: rgba(237,232,222,0.55);"
+						style="font-family: var(--font-display); color: rgba(var(--ink),0.70);"
 					>
 						Make your opening argument
 					</p>
 					<p
 						class="mt-3 text-xs tracking-widest uppercase"
-						style="color: rgba(237,232,222,0.42); font-family: var(--font-mono);"
+						style="color: rgba(var(--ink),0.55); font-family: var(--font-mono);"
 					>
 						Press the microphone to begin
 					</p>
@@ -229,12 +228,12 @@
 
 			<!-- Streaming AI response -->
 			{#if isStreaming && streamingText}
-				<div class="py-5" style="border-bottom: 1px solid rgba(255,255,255,0.04);">
+				<div class="py-5" style="border-bottom: 1px solid var(--border-color);">
 					<div class="flex items-center gap-3 mb-2">
-						<div class="h-1.5 w-1.5 rounded-full flex-shrink-0" style="background: #7dd3fc;"></div>
+						<div class="h-1.5 w-1.5 rounded-full flex-shrink-0" style="background: rgba(var(--ai-color),1);"></div>
 						<span
 							class="text-xs tracking-[0.2em] uppercase"
-							style="font-family: var(--font-mono); color: #7dd3fc;"
+							style="font-family: var(--font-mono); color: rgba(var(--ai-color),1);"
 						>
 							Opponent
 						</span>
@@ -242,8 +241,8 @@
 							class="px-2 py-0.5 text-[10px] tracking-widest uppercase"
 							style="
 								font-family: var(--font-mono);
-								color: rgba(125,211,252,0.6);
-								border: 1px solid rgba(125,211,252,0.2);
+								color: rgba(var(--ai-color),0.75);
+								border: 1px solid rgba(var(--ai-color),0.3);
 							"
 						>
 							{debate.aiSide === 'for' ? 'FOR' : 'AGAINST'}
@@ -253,12 +252,12 @@
 						class="pl-[18px] text-sm leading-relaxed"
 						style="
 							font-family: var(--font-mono);
-							color: rgba(237,232,222,0.93);
-							border-left: 2px solid rgba(125,211,252,0.2);
+							color: rgba(var(--ink),0.92);
+							border-left: 2px solid rgba(var(--ai-color),0.25);
 						"
 					>
 						{streamingText}<span
-							style="animation: blink-cursor 1s step-end infinite; color: rgba(125,211,252,0.6);"
+							style="animation: blink-cursor 1s step-end infinite; color: rgba(var(--ai-color),0.7);"
 							>|</span
 						>
 					</p>
@@ -269,10 +268,10 @@
 			{#if speech.interimTranscript}
 				<div class="py-5">
 					<div class="flex items-center gap-3 mb-2">
-						<div class="h-1.5 w-1.5 rounded-full flex-shrink-0" style="background: rgba(232,184,75,0.4);"></div>
+						<div class="h-1.5 w-1.5 rounded-full flex-shrink-0" style="background: rgba(var(--user-color),0.5);"></div>
 						<span
 							class="text-xs tracking-[0.2em] uppercase"
-							style="font-family: var(--font-mono); color: rgba(232,184,75,0.5);"
+							style="font-family: var(--font-mono); color: rgba(var(--user-color),0.70);"
 						>
 							You · hearing...
 						</span>
@@ -281,8 +280,8 @@
 						class="pl-[18px] text-sm leading-relaxed italic"
 						style="
 							font-family: var(--font-mono);
-							color: rgba(237,232,222,0.60);
-							border-left: 2px solid rgba(232,184,75,0.15);
+							color: rgba(var(--ink),0.72);
+							border-left: 2px solid rgba(var(--user-color),0.2);
 						"
 					>
 						{speech.interimTranscript}
@@ -297,13 +296,13 @@
 	<!-- Bottom dock -->
 	<div
 		class="flex-shrink-0 px-6 pb-8 pt-4"
-		style="border-top: 1px solid rgba(255,255,255,0.05); background: rgba(6,6,6,0.95);"
+		style="border-top: 1px solid var(--border-color); background: var(--canvas-bg);"
 	>
 		<div class="mx-auto flex max-w-2xl flex-col items-center gap-2">
 			{#if errorMsg}
 				<p
 					class="mb-2 text-xs"
-					style="color: rgba(239,68,68,0.7); font-family: var(--font-mono);"
+					style="color: rgba(239,68,68,0.85); font-family: var(--font-mono);"
 				>
 					{errorMsg}
 				</p>
@@ -318,7 +317,7 @@
 			{#if !llm.isReady && debate.phase !== 'loading'}
 				<p
 					class="text-xs tracking-widest uppercase"
-					style="color: rgba(237,232,222,0.45); font-family: var(--font-mono);"
+					style="color: rgba(var(--ink),0.55); font-family: var(--font-mono);"
 				>
 					Waiting for model...
 				</p>

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Mic, MicOff, Loader } from 'lucide-svelte';
+	import { Mic, Loader } from 'lucide-svelte';
 
 	type Status = 'idle' | 'listening' | 'processing' | 'speaking';
 
@@ -11,7 +11,6 @@
 
 	let { status = 'idle', disabled = false, onclick }: Props = $props();
 
-	const isActive = $derived(status !== 'idle');
 	const label = $derived(
 		status === 'listening'
 			? 'Listening...'
@@ -36,7 +35,7 @@
 			class="pointer-events-none absolute rounded-full border"
 			style="
 				width: 80px; height: 80px;
-				border-color: rgba(232,184,75,0.5);
+				border-color: rgba(var(--user-color),0.55);
 				animation: pulse-ring 1.6s ease-out infinite;
 			"
 		></span>
@@ -44,7 +43,7 @@
 			class="pointer-events-none absolute rounded-full border"
 			style="
 				width: 80px; height: 80px;
-				border-color: rgba(232,184,75,0.3);
+				border-color: rgba(var(--user-color),0.35);
 				animation: pulse-ring 1.6s ease-out 0.5s infinite;
 			"
 		></span>
@@ -52,7 +51,7 @@
 			class="pointer-events-none absolute rounded-full border"
 			style="
 				width: 80px; height: 80px;
-				border-color: rgba(232,184,75,0.15);
+				border-color: rgba(var(--user-color),0.18);
 				animation: pulse-ring 1.6s ease-out 1s infinite;
 			"
 		></span>
@@ -66,8 +65,8 @@
 				width: 88px; height: 88px;
 				border-radius: 50%;
 				border: 1px solid transparent;
-				border-top-color: rgba(232,184,75,0.7);
-				border-right-color: rgba(232,184,75,0.3);
+				border-top-color: rgba(var(--user-color),0.75);
+				border-right-color: rgba(var(--user-color),0.35);
 				animation: spin-arc 0.9s linear infinite;
 			"
 		></span>
@@ -80,7 +79,7 @@
 			style="
 				width: 88px; height: 88px;
 				border-radius: 50%;
-				border: 1px solid rgba(125,211,252,0.25);
+				border: 1px solid rgba(var(--ai-color),0.30);
 			"
 		></span>
 	{/if}
@@ -90,28 +89,28 @@
 		class="relative flex h-20 w-20 items-center justify-center rounded-full transition-all duration-300"
 		style="
 			background: {status === 'listening'
-			? 'rgba(232,184,75,0.12)'
+			? 'rgba(var(--user-color),0.12)'
 			: status === 'speaking'
-				? 'rgba(125,211,252,0.08)'
-				: 'rgba(237,232,222,0.04)'};
+				? 'rgba(var(--ai-color),0.08)'
+				: 'rgba(var(--ink),0.05)'};
 			border: 1px solid {status === 'listening'
-			? 'rgba(232,184,75,0.5)'
+			? 'rgba(var(--user-color),0.55)'
 			: status === 'speaking'
-				? 'rgba(125,211,252,0.4)'
+				? 'rgba(var(--ai-color),0.45)'
 				: status === 'processing'
-					? 'rgba(232,184,75,0.3)'
-					: 'rgba(237,232,222,0.12)'};
+					? 'rgba(var(--user-color),0.35)'
+					: 'rgba(var(--ink),0.15)'};
 			box-shadow: {status === 'listening'
-			? '0 0 30px rgba(232,184,75,0.08), inset 0 0 20px rgba(232,184,75,0.04)'
+			? '0 0 30px rgba(var(--user-color),0.10), inset 0 0 20px rgba(var(--user-color),0.05)'
 			: status === 'speaking'
-				? '0 0 30px rgba(125,211,252,0.06)'
+				? '0 0 30px rgba(var(--ai-color),0.08)'
 				: 'none'};
 			opacity: {disabled ? 0.3 : 1};
 			cursor: {disabled ? 'not-allowed' : 'pointer'};
 		"
 	>
 		{#if status === 'processing'}
-			<Loader size={22} style="color: rgba(232,184,75,0.7); animation: spin-arc 1.5s linear infinite;" />
+			<Loader size={22} style="color: rgba(var(--user-color),0.75); animation: spin-arc 1.5s linear infinite;" />
 		{:else if status === 'speaking'}
 			<!-- Audio visualizer bars -->
 			<div class="flex items-end gap-[3px]" style="height: 20px;">
@@ -119,7 +118,7 @@
 					<div
 						class="w-[3px] rounded-full"
 						style="
-							background: rgba(125,211,252,0.7);
+							background: rgba(var(--ai-color),0.75);
 							height: 100%;
 							transform-origin: bottom;
 							animation: bar-wave 0.8s ease-in-out {delay}s infinite;
@@ -128,13 +127,9 @@
 				{/each}
 			</div>
 		{:else if status === 'listening'}
-			<Mic size={24} style="color: #e8b84b;" />
+			<Mic size={24} style="color: rgba(var(--user-color),1);" />
 		{:else}
-			<Mic
-				size={24}
-				style="color: rgba(237,232,222,0.72); transition: color 0.2s;"
-				class="group-hover:!text-ink"
-			/>
+			<Mic size={24} style="color: rgba(var(--ink),0.75); transition: color 0.2s;" />
 		{/if}
 	</div>
 
@@ -144,12 +139,12 @@
 		style="
 			font-family: var(--font-mono);
 			color: {status === 'listening'
-			? 'rgba(232,184,75,0.8)'
+			? 'rgba(var(--user-color),0.85)'
 			: status === 'speaking'
-				? 'rgba(125,211,252,0.7)'
+				? 'rgba(var(--ai-color),0.75)'
 				: status === 'processing'
-					? 'rgba(237,232,222,0.4)'
-					: 'rgba(237,232,222,0.3)'};
+					? 'rgba(var(--ink),0.55)'
+					: 'rgba(var(--ink),0.45)'};
 		"
 	>
 		{label}

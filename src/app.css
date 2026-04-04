@@ -16,8 +16,27 @@
   --font-mono: 'IBM Plex Mono', 'Courier New', monospace;
 }
 
+/* ── CSS variable tokens (used in inline styles as rgba(var(--ink),opacity)) ── */
 :root {
+  --ink: 237, 232, 222;
+  --canvas-bg: #060606;
+  --surface-bg: #0e0e0e;
+  --surface-raised-bg: #161616;
+  --border-color: rgba(255,255,255,0.06);
+  --user-color: 232, 184, 75;
+  --ai-color: 125, 211, 252;
   color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --ink: 28, 22, 12;
+  --canvas-bg: #f2ede3;
+  --surface-bg: #e8e2d6;
+  --surface-raised-bg: #ddd6c8;
+  --border-color: rgba(0,0,0,0.09);
+  --user-color: 160, 110, 20;
+  --ai-color: 20, 100, 170;
+  color-scheme: light;
 }
 
 html {
@@ -27,22 +46,33 @@ html {
 body {
   height: 100%;
   font-family: var(--font-mono);
-  background-color: #060606;
-  color: #ede8de;
+  background-color: var(--canvas-bg);
+  color: rgba(var(--ink), 0.92);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+body:not([data-theme="light"]) {
   background-image:
     radial-gradient(ellipse 1000px 500px at 50% -100px, rgba(232, 184, 75, 0.05) 0%, transparent 70%),
     radial-gradient(ellipse 700px 500px at 90% 110%, rgba(125, 211, 252, 0.03) 0%, transparent 70%);
   background-attachment: fixed;
 }
 
-::selection {
-  background: rgba(232, 184, 75, 0.2);
-  color: #ede8de;
+[data-theme="light"] body {
+  background-image:
+    radial-gradient(ellipse 1000px 500px at 50% -100px, rgba(180, 130, 20, 0.06) 0%, transparent 70%),
+    radial-gradient(ellipse 700px 500px at 90% 110%, rgba(20, 100, 170, 0.03) 0%, transparent 70%);
+  background-attachment: fixed;
 }
 
-/* Keyframes */
+::selection {
+  background: rgba(232, 184, 75, 0.2);
+  color: rgba(var(--ink), 1);
+}
+
+/* ── Keyframes ──────────────────────────────────────────────────────────── */
 
 @keyframes pulse-ring {
   0% {
@@ -130,4 +160,15 @@ body {
 @keyframes progress-shine {
   from { background-position: -200% center; }
   to { background-position: 200% center; }
+}
+
+@keyframes trophy-bounce {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50% { transform: translateY(-8px) rotate(3deg); }
+}
+
+@keyframes avatar-reveal {
+  0% { opacity: 0; transform: scale(0.8); }
+  70% { transform: scale(1.05); }
+  100% { opacity: 1; transform: scale(1); }
 }

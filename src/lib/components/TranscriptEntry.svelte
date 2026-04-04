@@ -25,9 +25,9 @@
 </script>
 
 <div
-	class="fade-up-entry flex flex-col gap-2 py-5"
+	class="flex flex-col gap-2 py-5"
 	style="
-		border-bottom: 1px solid rgba(255,255,255,0.04);
+		border-bottom: 1px solid var(--border-color);
 		animation: fade-up 0.3s ease-out both;
 	"
 >
@@ -36,7 +36,7 @@
 		<!-- Speaker dot -->
 		<div
 			class="h-1.5 w-1.5 rounded-full flex-shrink-0"
-			style="background: {isUser ? '#e8b84b' : '#7dd3fc'};"
+			style="background: {isUser ? 'rgba(var(--user-color),1)' : 'rgba(var(--ai-color),1)'};"
 		></div>
 
 		<!-- Speaker label -->
@@ -44,7 +44,7 @@
 			class="text-xs tracking-[0.2em] uppercase"
 			style="
 				font-family: var(--font-mono);
-				color: {isUser ? '#e8b84b' : '#7dd3fc'};
+				color: {isUser ? 'rgba(var(--user-color),1)' : 'rgba(var(--ai-color),1)'};
 			"
 		>
 			{speakerLabel}
@@ -55,8 +55,8 @@
 			class="px-2 py-0.5 text-[10px] tracking-widest uppercase"
 			style="
 				font-family: var(--font-mono);
-				color: {isUser ? 'rgba(232,184,75,0.6)' : 'rgba(125,211,252,0.6)'};
-				border: 1px solid {isUser ? 'rgba(232,184,75,0.2)' : 'rgba(125,211,252,0.2)'};
+				color: {isUser ? 'rgba(var(--user-color),0.75)' : 'rgba(var(--ai-color),0.75)'};
+				border: 1px solid {isUser ? 'rgba(var(--user-color),0.30)' : 'rgba(var(--ai-color),0.30)'};
 			"
 		>
 			{sideLabel}
@@ -65,7 +65,7 @@
 		<!-- Timestamp -->
 		<span
 			class="ml-auto text-[10px] tabular-nums"
-			style="color: rgba(237,232,222,0.42); font-family: var(--font-mono);"
+			style="color: rgba(var(--ink),0.50); font-family: var(--font-mono);"
 		>
 			{formatTime(turn.timestamp)}
 		</span>
@@ -76,8 +76,8 @@
 		class="pl-[18px] text-sm leading-relaxed"
 		style="
 			font-family: var(--font-mono);
-			color: {isUser ? 'rgba(237,232,222,0.93)' : 'rgba(237,232,222,0.93)'};
-			border-left: 2px solid {isUser ? 'rgba(232,184,75,0.25)' : 'rgba(125,211,252,0.2)'};
+			color: rgba(var(--ink),0.92);
+			border-left: 2px solid {isUser ? 'rgba(var(--user-color),0.25)' : 'rgba(var(--ai-color),0.22)'};
 		"
 	>
 		{turn.text}

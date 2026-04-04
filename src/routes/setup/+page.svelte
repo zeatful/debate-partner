@@ -84,6 +84,25 @@
 		speech.setVoice(name);
 		speech.speak('This is how I will sound during the debate.');
 	}
+
+	let isListeningForTopic = $state(false);
+
+	async function dictateTopic() {
+		if (isListeningForTopic) {
+			speech.stopListening();
+			isListeningForTopic = false;
+			return;
+		}
+		isListeningForTopic = true;
+		try {
+			const result = await speech.listen();
+			if (result.trim()) topic = result.trim();
+		} catch {
+			// ignore
+		} finally {
+			isListeningForTopic = false;
+		}
+	}
 </script>
 
 <main class="flex min-h-screen flex-col items-center justify-center px-6 py-16" style="background: var(--canvas-bg);">
@@ -108,19 +127,90 @@
 				style="color: rgba(var(--ink),0.70); font-family: var(--font-mono);">
 				Proposition
 			</label>
-			<input
-				id="topic-input"
-				type="text"
-				bind:value={topic}
-				onkeydown={handleKeydown}
-				placeholder="State the proposition to debate..."
-				maxlength="140"
-				class="w-full bg-transparent py-3 text-base outline-none transition-colors duration-200"
-				style="font-family: var(--font-mono); color: rgba(var(--ink),0.95); border-bottom: 1px solid rgba(var(--ink),0.18); caret-color: rgba(var(--user-color),1); placeholder-color: rgba(var(--ink),0.25);"
-				onfocus={(e) => { (e.target as HTMLInputElement).style.borderBottomColor = 'rgba(var(--user-color),0.5)'; }}
-				onblur={(e) => { (e.target as HTMLInputElement).style.borderBottomColor = 'rgba(var(--ink),0.18)'; }}
-			/>
-			<div class="mt-2 flex justify-end">
+
+			<!-- Input row with inline mic button -->
+			<div class="flex items-end gap-3"
+				style="border-bottom: 1px solid {isListeningForTopic ? 'rgba(var(--user-color),0.5)' : 'rgba(var(--ink),0.18)'}; transition: border-color 0.2s;"
+				id="topic-input-row"
+			>
+				<input
+					id="topic-input"
+					type="text"
+					bind:value={topic}
+					onkeydown={handleKeydown}
+					placeholder={isListeningForTopic ? 'Listening...' : 'State the proposition to debate...'}
+					maxlength="140"
+					class="flex-1 bg-transparent py-3 text-base outline-none transition-colors duration-200"
+					style="
+						font-family: var(--font-mono);
+						color: rgba(var(--ink),0.95);
+						border: none;
+						caret-color: rgba(var(--user-color),1);
+					"
+					onfocus={() => {
+						const row = document.getElementById('topic-input-row');
+						if (row) row.style.borderBottomColor = 'rgba(var(--user-color),0.5)';
+					}}
+					onblur={() => {
+						if (!isListeningForTopic) {
+							const row = document.getElementById('topic-input-row');
+							if (row) row.style.borderBottomColor = 'rgba(var(--ink),0.18)';
+						}
+					}}
+				/>
+
+				<!-- Mic button -->
+				<button
+					type="button"
+					onclick={dictateTopic}
+					aria-label={isListeningForTopic ? 'Stop listening' : 'Dictate proposition'}
+					class="relative mb-2 flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full transition-all duration-200"
+					style="
+						background: {isListeningForTopic ? 'rgba(var(--user-color),0.15)' : 'transparent'};
+						border: 1px solid {isListeningForTopic ? 'rgba(var(--user-color),0.55)' : 'rgba(var(--ink),0.18)'};
+						color: {isListeningForTopic ? 'rgba(var(--user-color),1)' : 'rgba(var(--ink),0.45)'};
+					"
+					onmouseenter={(e) => {
+						if (isListeningForTopic) return;
+						const t = e.currentTarget as HTMLButtonElement;
+						t.style.borderColor = 'rgba(var(--user-color),0.4)';
+						t.style.color = 'rgba(var(--user-color),0.85)';
+					}}
+					onmouseleave={(e) => {
+						if (isListeningForTopic) return;
+						const t = e.currentTarget as HTMLButtonElement;
+						t.style.borderColor = 'rgba(var(--ink),0.18)';
+						t.style.color = 'rgba(var(--ink),0.45)';
+					}}
+				>
+					<!-- Pulse ring when listening -->
+					{#if isListeningForTopic}
+						<span class="pointer-events-none absolute inset-0 rounded-full"
+							style="border: 1px solid rgba(var(--user-color),0.5); animation: topic-mic-pulse 1.4s ease-out infinite;"></span>
+					{/if}
+
+					<!-- Mic SVG -->
+					{#if isListeningForTopic}
+						<!-- Stop / square icon -->
+						<svg width="12" height="12" viewBox="0 0 12 12" fill="currentColor">
+							<rect x="2" y="2" width="8" height="8" rx="1"/>
+						</svg>
+					{:else}
+						<!-- Mic icon -->
+						<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+							<rect x="9" y="2" width="6" height="12" rx="3"/>
+							<path d="M5 10a7 7 0 0 0 14 0M12 19v3M9 22h6"/>
+						</svg>
+					{/if}
+				</button>
+			</div>
+
+			<div class="mt-2 flex items-center justify-between">
+				<span class="text-xs" style="color: rgba(var(--user-color),0.65); font-family: var(--font-mono); min-height: 1em;">
+					{#if isListeningForTopic}
+						{speech.interimTranscript || 'Say your proposition...'}
+					{/if}
+				</span>
 				<span class="text-xs tabular-nums" style="color: rgba(var(--ink),0.50); font-family: var(--font-mono);">
 					{topic.length}/140
 				</span>

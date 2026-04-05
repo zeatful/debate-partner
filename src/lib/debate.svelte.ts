@@ -22,12 +22,30 @@ export interface DebateState {
 	winner: DebateWinner | null;
 }
 
+const SESSION_KEY = 'debate-setup';
+
+function saveSetup(topic: string, mode: DebateMode, userSide: DebateSide, aiSide: DebateSide) {
+	try {
+		sessionStorage.setItem(SESSION_KEY, JSON.stringify({ topic, mode, userSide, aiSide }));
+	} catch { /* ignore */ }
+}
+
+function loadSetup(): { topic: string; mode: DebateMode; userSide: DebateSide; aiSide: DebateSide } | null {
+	try {
+		const raw = sessionStorage.getItem(SESSION_KEY);
+		if (raw) return JSON.parse(raw);
+	} catch { /* ignore */ }
+	return null;
+}
+
 function createDebateStore() {
-	let topic = $state('');
-	let mode = $state<DebateMode>('human-vs-ai');
-	let userSide = $state<DebateSide>('for');
-	let aiSide = $state<DebateSide>('against');
-	let phase = $state<DebatePhase>('setup');
+	const saved = typeof sessionStorage !== 'undefined' ? loadSetup() : null;
+
+	let topic = $state(saved?.topic ?? '');
+	let mode = $state<DebateMode>(saved?.mode ?? 'human-vs-ai');
+	let userSide = $state<DebateSide>(saved?.userSide ?? 'for');
+	let aiSide = $state<DebateSide>(saved?.aiSide ?? 'against');
+	let phase = $state<DebatePhase>(saved?.topic ? 'loading' : 'setup');
 	let turns = $state<Turn[]>([]);
 	let roundNumber = $state(0);
 	const maxRounds = 4;
@@ -60,6 +78,7 @@ function createDebateStore() {
 			roundNumber = 0;
 			verdict = '';
 			winner = null;
+			saveSetup(t, 'human-vs-ai', side, aiSide);
 		},
 
 		startAiVsAiDebate(t: string) {
@@ -72,6 +91,7 @@ function createDebateStore() {
 			roundNumber = 0;
 			verdict = '';
 			winner = null;
+			saveSetup(t, 'ai-vs-ai', 'for', 'against');
 		},
 
 		setPhase(p: DebatePhase) {
@@ -102,6 +122,7 @@ function createDebateStore() {
 			verdict = v;
 			winner = w;
 			phase = 'results';
+			try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
 		},
 
 		reset() {
@@ -114,6 +135,7 @@ function createDebateStore() {
 			roundNumber = 0;
 			verdict = '';
 			winner = null;
+			try { sessionStorage.removeItem(SESSION_KEY); } catch { /* ignore */ }
 		}
 	};
 }

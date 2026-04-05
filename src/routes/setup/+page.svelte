@@ -4,10 +4,13 @@
 	import { debate, type DebateSide, type DebateMode } from '$lib/debate.svelte.js';
 	import { speech } from '$lib/speech.svelte.js';
 	import { llm, AVAILABLE_MODELS } from '$lib/llm.svelte.js';
+	import { isMobile } from '$lib/utils.js';
 
 	let topic = $state('');
 	let selectedSide = $state<DebateSide>('for');
 	let selectedMode = $state<DebateMode>('human-vs-ai');
+	let onMobile = $state(false);
+	let webGpuUnsupported = $state(false);
 
 	// Panel open states
 	let showVoicePicker = $state(false);
@@ -53,7 +56,14 @@
 		AVAILABLE_MODELS.find((m) => m.id === llm.selectedModelId)?.name ?? 'Select model'
 	);
 
+	// On mobile, only show models flagged as mobile-compatible
+	const visibleModels = $derived(
+		onMobile ? AVAILABLE_MODELS.filter((m) => m.mobileCompatible) : AVAILABLE_MODELS
+	);
+
 	onMount(() => {
+		onMobile = isMobile();
+		webGpuUnsupported = !('gpu' in navigator);
 		speech.initVoices();
 
 		// Play voice intro once per session
@@ -125,6 +135,34 @@
 				style="font-family: var(--font-display); color: rgba(var(--ink),0.70);">Partner</h1>
 			<div class="mt-5 h-px w-12 mx-auto" style="background: rgba(var(--user-color),0.35);"></div>
 		</div>
+
+		<!-- Mobile notice -->
+		{#if onMobile}
+			<div class="mb-8 flex flex-col gap-2 px-4 py-4 text-xs leading-relaxed"
+				style="border: 1px solid rgba(var(--user-color),0.28); background: rgba(var(--user-color),0.05); font-family: var(--font-mono);">
+				<p class="font-medium tracking-wide uppercase text-[10px]" style="color: rgba(var(--user-color),0.80); letter-spacing: 0.2em;">
+					Mobile Device Detected
+				</p>
+				<p style="color: rgba(var(--ink),0.78);">
+					Debate Partner runs AI entirely in your browser — no server required — but this means downloading a large model file.
+				</p>
+				<ul class="flex flex-col gap-1.5 pl-3" style="color: rgba(var(--ink),0.68); list-style: none;">
+					<li style="display: flex; gap: 0.5rem;"><span style="color: rgba(var(--user-color),0.7);">·</span> <span><strong style="color: rgba(var(--ink),0.85);">Use Wi-Fi.</strong> The model is ~2 GB and will count against mobile data.</span></li>
+					<li style="display: flex; gap: 0.5rem;"><span style="color: rgba(var(--user-color),0.7);">·</span> <span>Only smaller models are shown below — larger ones will crash mobile browsers.</span></li>
+					<li style="display: flex; gap: 0.5rem;"><span style="color: rgba(var(--user-color),0.7);">·</span> <span>Smaller models produce shorter, simpler arguments than the desktop experience.</span></li>
+					<li style="display: flex; gap: 0.5rem;"><span style="color: rgba(var(--user-color),0.7);">·</span> <span>Even supported models may be unstable on some devices or browser versions.</span></li>
+				</ul>
+				<p class="mt-1" style="color: rgba(var(--ink),0.50);">
+					For the best experience, open this on a desktop or laptop with Chrome or Edge.
+				</p>
+			</div>
+		{:else if webGpuUnsupported}
+			<div class="mb-8 px-4 py-3 text-xs leading-relaxed"
+				style="border: 1px solid rgba(239,68,68,0.35); background: rgba(239,68,68,0.06); font-family: var(--font-mono); color: rgba(239,68,68,0.85);">
+				Your browser does not support WebGPU, which is required to run the AI model locally.
+				Debate Partner works on desktop Chrome or Edge (version 113+).
+			</div>
+		{/if}
 
 		<!-- Topic input -->
 		<div class="mb-8">
@@ -385,7 +423,7 @@
 
 			{#if showModelPicker}
 				<div class="mt-2" style="border: 1px solid rgba(var(--ink),0.10); animation: fade-up 0.2s ease-out both;">
-					{#each AVAILABLE_MODELS as model}
+					{#each visibleModels as model}
 						<button type="button" onclick={() => llm.setModel(model.id)}
 							class="flex w-full items-start justify-between gap-4 px-4 py-3 text-left transition-colors duration-100"
 							style="
@@ -399,14 +437,26 @@
 							onmouseleave={(e) => { if (llm.selectedModelId === model.id) return; (e.currentTarget as HTMLButtonElement).style.background = 'transparent'; }}
 						>
 							<div class="flex flex-col gap-0.5 min-w-0">
-								<div class="flex items-center gap-2">
+								<div class="flex items-center gap-2 flex-wrap">
 									<span class="text-xs" style="color: {llm.selectedModelId === model.id ? 'rgba(var(--user-color),1)' : 'rgba(var(--ink),0.90)'};">
 										{model.name}
 									</span>
-									{#if model.recommended}
+									{#if !onMobile && model.recommended}
 										<span class="text-[9px] tracking-widest uppercase px-1.5 py-0.5"
 											style="color: rgba(var(--user-color),0.75); border: 1px solid rgba(var(--user-color),0.30);">
 											Recommended
+										</span>
+									{/if}
+									{#if onMobile && model.mobileRecommended}
+										<span class="text-[9px] tracking-widest uppercase px-1.5 py-0.5"
+											style="color: rgba(var(--user-color),0.75); border: 1px solid rgba(var(--user-color),0.30);">
+											Best for Mobile
+										</span>
+									{/if}
+									{#if onMobile && model.mobileCompatible && !model.mobileRecommended}
+										<span class="text-[9px] tracking-widest uppercase px-1.5 py-0.5"
+											style="color: rgba(var(--ink),0.45); border: 1px solid rgba(var(--ink),0.18);">
+											May be unstable
 										</span>
 									{/if}
 								</div>
@@ -415,9 +465,15 @@
 							<span class="text-[11px] flex-shrink-0 tabular-nums" style="color: rgba(var(--ink),0.45);">{model.size}</span>
 						</button>
 					{/each}
-					<p class="px-4 py-2.5 text-[11px]" style="color: rgba(var(--ink),0.38); font-family: var(--font-mono);">
-						Downloaded once, cached in your browser. Requires Chrome/Edge with WebGPU.
-					</p>
+					{#if onMobile}
+						<p class="px-4 py-2.5 text-[11px]" style="color: rgba(var(--ink),0.38); font-family: var(--font-mono);">
+							Downloaded once and cached. Larger models are hidden — they exceed mobile browser memory limits.
+						</p>
+					{:else}
+						<p class="px-4 py-2.5 text-[11px]" style="color: rgba(var(--ink),0.38); font-family: var(--font-mono);">
+							Downloaded once, cached in your browser. Requires Chrome or Edge with WebGPU.
+						</p>
+					{/if}
 				</div>
 			{/if}
 		</div>

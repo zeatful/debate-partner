@@ -3,10 +3,11 @@
 		progress?: number;
 		status?: string;
 		label?: string;
+		error?: string;
 		oncancel?: () => void;
 	}
 
-	let { progress = 0, status = '', label = 'Preparing', oncancel }: Props = $props();
+	let { progress = 0, status = '', label = 'Preparing', error = '', oncancel }: Props = $props();
 
 	const clampedProgress = $derived(Math.max(0, Math.min(100, progress)));
 	const isIndeterminate = $derived(clampedProgress === 0);
@@ -202,10 +203,19 @@
 			class="max-w-xs text-center text-xs leading-relaxed"
 			style="color: rgba(var(--ink),0.62); font-family: var(--font-mono); min-height: 2rem;"
 		>
-			{isIndeterminate ? 'Initializing WebGPU runtime…' : (status || 'Loading…')}
+			{#if error}
+				&nbsp;
+			{:else}
+				{isIndeterminate ? 'Initializing WebGPU runtime…' : (status || 'Loading…')}
+			{/if}
 		</p>
 
-		{#if clampedProgress < 10}
+		{#if error}
+			<div class="w-full rounded-none px-4 py-3 text-center text-xs leading-relaxed"
+				style="border: 1px solid rgba(239,68,68,0.35); background: rgba(239,68,68,0.06); font-family: var(--font-mono); color: rgba(239,68,68,0.9);">
+				{error}
+			</div>
+		{:else if clampedProgress < 10}
 			<p class="text-center text-xs" style="color: rgba(var(--ink),0.38); font-family: var(--font-mono);">
 				First load downloads ~2 GB · cached after that
 			</p>

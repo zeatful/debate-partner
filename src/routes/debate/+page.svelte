@@ -49,6 +49,9 @@
 			if (isAiVsAi) {
 				runAiVsAiLoop();
 			}
+		}).catch((err: Error) => {
+			errorMsg = err.message ?? 'Failed to load the AI model.';
+			debate.setPhase('loading'); // stay on loading screen so the error is visible
 		});
 	});
 
@@ -231,7 +234,7 @@
 
 <!-- Loading overlay -->
 {#if debate.phase === 'loading'}
-	<LoadingScreen progress={llm.loadProgress} status={llm.loadStatus} label="Loading AI Model" oncancel={() => goto('/setup')} />
+	<LoadingScreen progress={llm.loadProgress} status={llm.loadStatus} label="Loading AI Model" error={errorMsg} oncancel={() => goto('/setup')} />
 {:else if debate.phase === 'judging' && !debate.verdict}
 	<JudgingScreen />
 {/if}

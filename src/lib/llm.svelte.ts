@@ -7,6 +7,8 @@ export interface ModelOption {
 	size: string;
 	description: string;
 	recommended?: boolean;
+	mobileRecommended?: boolean;
+	mobileCompatible?: boolean;
 }
 
 export const AVAILABLE_MODELS: ModelOption[] = [
@@ -14,13 +16,16 @@ export const AVAILABLE_MODELS: ModelOption[] = [
 		id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',
 		name: 'Llama 3.2 · 3B',
 		size: '~2 GB',
-		description: 'Fast download. Basic reasoning.'
+		description: 'Best option for mobile. Shorter, simpler arguments.',
+		mobileCompatible: true,
+		mobileRecommended: true
 	},
 	{
 		id: 'Phi-3.5-mini-instruct-q4f16_1-MLC',
 		name: 'Phi 3.5 Mini · 3.8B',
 		size: '~2.5 GB',
-		description: 'Strong instruction following for its size.'
+		description: 'Better reasoning. May be unstable on mobile.',
+		mobileCompatible: true
 	},
 	{
 		id: 'Mistral-7B-Instruct-v0.3-q4f16_1-MLC',
@@ -78,7 +83,12 @@ function createLLMStore() {
 	let isLoading = $state(false);
 	let isReady = $state(false);
 	let isGenerating = $state(false);
-	let selectedModelId = $state(AVAILABLE_MODELS.find((m) => m.recommended)?.id ?? AVAILABLE_MODELS[0].id);
+	const isMobileDevice = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+	let selectedModelId = $state(
+		isMobileDevice
+			? (AVAILABLE_MODELS.find((m) => m.mobileRecommended)?.id ?? AVAILABLE_MODELS[0].id)
+			: (AVAILABLE_MODELS.find((m) => m.recommended)?.id ?? AVAILABLE_MODELS[0].id)
+	);
 
 	return {
 		get loadProgress() { return loadProgress; },
@@ -96,6 +106,16 @@ function createLLMStore() {
 
 		async load() {
 			if (isReady || isLoading) return;
+
+			// WebGPU is required — mobile Chrome and many mobile browsers don't support it,
+			// and even when present on mobile the per-tab memory cap (~1–1.5 GB) will crash
+			// the renderer process before a 2+ GB model can load.
+			if (!('gpu' in navigator)) {
+				throw new Error(
+					'WebGPU is not available in this browser. Debate Partner requires a desktop browser — Chrome or Edge on a laptop or desktop computer.'
+				);
+			}
+
 			isLoading = true;
 			engine = new webllm.MLCEngine();
 			engine.setInitProgressCallback((report) => {

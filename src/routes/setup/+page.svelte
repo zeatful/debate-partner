@@ -1,12 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { debate, type DebateSide } from '$lib/debate.svelte.js';
+	import { debate, type DebateSide, type DebateMode } from '$lib/debate.svelte.js';
 	import { speech } from '$lib/speech.svelte.js';
 	import { llm, AVAILABLE_MODELS } from '$lib/llm.svelte.js';
 
 	let topic = $state('');
 	let selectedSide = $state<DebateSide>('for');
+	let selectedMode = $state<DebateMode>('human-vs-ai');
 
 	// Panel open states
 	let showVoicePicker = $state(false);
@@ -72,7 +73,11 @@
 
 	function start() {
 		if (!canStart) return;
-		debate.startDebate(topic.trim(), selectedSide);
+		if (selectedMode === 'ai-vs-ai') {
+			debate.startAiVsAiDebate(topic.trim());
+		} else {
+			debate.startDebate(topic.trim(), selectedSide);
+		}
 		goto('/debate');
 	}
 
@@ -235,7 +240,55 @@
 			</div>
 		</div>
 
-		<!-- Side selector -->
+		<!-- Mode selector -->
+		<div class="mb-8">
+			<p class="mb-4 text-xs tracking-[0.25em] uppercase"
+				style="color: rgba(var(--ink),0.70); font-family: var(--font-mono);">Mode</p>
+			<div class="grid grid-cols-2 gap-3">
+				<button type="button" onclick={() => (selectedMode = 'human-vs-ai')}
+					class="relative flex flex-col gap-2 p-5 text-left transition-all duration-200"
+					style="
+						background: {selectedMode === 'human-vs-ai' ? 'rgba(var(--user-color),0.07)' : 'transparent'};
+						border: 1px solid {selectedMode === 'human-vs-ai' ? 'rgba(var(--user-color),0.40)' : 'rgba(var(--ink),0.10)'};
+					">
+					<span class="text-xs tracking-[0.3em] uppercase"
+						style="font-family: var(--font-mono); color: {selectedMode === 'human-vs-ai' ? 'rgba(var(--user-color),1)' : 'rgba(var(--ink),0.40)'};">
+						You vs AI
+					</span>
+					<span class="text-xs leading-relaxed"
+						style="font-family: var(--font-mono); color: rgba(var(--ink),0.70);">
+						Argue your position against an AI opponent
+					</span>
+					{#if selectedMode === 'human-vs-ai'}
+						<div class="absolute right-3 top-3 h-1.5 w-1.5 rounded-full"
+							style="background: rgba(var(--user-color),1);"></div>
+					{/if}
+				</button>
+
+				<button type="button" onclick={() => (selectedMode = 'ai-vs-ai')}
+					class="relative flex flex-col gap-2 p-5 text-left transition-all duration-200"
+					style="
+						background: {selectedMode === 'ai-vs-ai' ? 'rgba(var(--ai-color),0.06)' : 'transparent'};
+						border: 1px solid {selectedMode === 'ai-vs-ai' ? 'rgba(var(--ai-color),0.35)' : 'rgba(var(--ink),0.10)'};
+					">
+					<span class="text-xs tracking-[0.3em] uppercase"
+						style="font-family: var(--font-mono); color: {selectedMode === 'ai-vs-ai' ? 'rgba(var(--ai-color),1)' : 'rgba(var(--ink),0.40)'};">
+						AI vs AI
+					</span>
+					<span class="text-xs leading-relaxed"
+						style="font-family: var(--font-mono); color: rgba(var(--ink),0.70);">
+						Watch two AIs argue opposite sides automatically
+					</span>
+					{#if selectedMode === 'ai-vs-ai'}
+						<div class="absolute right-3 top-3 h-1.5 w-1.5 rounded-full"
+							style="background: rgba(var(--ai-color),1);"></div>
+					{/if}
+				</button>
+			</div>
+		</div>
+
+		<!-- Side selector — only shown in human-vs-ai mode -->
+		{#if selectedMode === 'human-vs-ai'}
 		<div class="mb-8">
 			<p class="mb-4 text-xs tracking-[0.25em] uppercase"
 				style="color: rgba(var(--ink),0.70); font-family: var(--font-mono);">Your Position</p>
@@ -263,6 +316,54 @@
 				{/each}
 			</div>
 		</div>
+		{:else}
+		<!-- AI vs AI: show sides with voice pickers -->
+		<div class="mb-8">
+			<p class="mb-4 text-xs tracking-[0.25em] uppercase"
+				style="color: rgba(var(--ink),0.70); font-family: var(--font-mono);">Sides &amp; Voices</p>
+			<div class="grid grid-cols-2 gap-3">
+				<!-- AI 1 (FOR) -->
+				<div class="flex flex-col gap-3 p-4"
+					style="border: 1px solid rgba(var(--user-color),0.22); background: rgba(var(--user-color),0.04);">
+					<span class="text-xs tracking-[0.3em] uppercase"
+						style="font-family: var(--font-mono); color: rgba(var(--user-color),0.85);">AI 1 · FOR</span>
+					<div>
+						<p class="mb-1.5 text-[10px] tracking-[0.2em] uppercase"
+							style="font-family: var(--font-mono); color: rgba(var(--ink),0.45);">Voice</p>
+						<select
+							value={speech.ai1VoiceName}
+							onchange={(e) => { speech.setAi1Voice(e.currentTarget.value); speech.speak('This is how I will sound during the debate.', e.currentTarget.value); }}
+							style="width:100%; font-family:var(--font-mono); font-size:11px; background:rgba(var(--user-color),0.06); color:rgba(var(--ink),0.85); border:1px solid rgba(var(--user-color),0.25); padding:5px 6px; cursor:pointer; outline:none;"
+						>
+							{#each speech.availableVoices as v}
+								<option value={v.name}>{v.label} ({v.region})</option>
+							{/each}
+						</select>
+					</div>
+				</div>
+
+				<!-- AI 2 (AGAINST) -->
+				<div class="flex flex-col gap-3 p-4"
+					style="border: 1px solid rgba(var(--ai-color),0.22); background: rgba(var(--ai-color),0.04);">
+					<span class="text-xs tracking-[0.3em] uppercase"
+						style="font-family: var(--font-mono); color: rgba(var(--ai-color),0.85);">AI 2 · AGAINST</span>
+					<div>
+						<p class="mb-1.5 text-[10px] tracking-[0.2em] uppercase"
+							style="font-family: var(--font-mono); color: rgba(var(--ink),0.45);">Voice</p>
+						<select
+							value={speech.ai2VoiceName}
+							onchange={(e) => { speech.setAi2Voice(e.currentTarget.value); speech.speak('This is how I will sound during the debate.', e.currentTarget.value); }}
+							style="width:100%; font-family:var(--font-mono); font-size:11px; background:rgba(var(--ai-color),0.06); color:rgba(var(--ink),0.85); border:1px solid rgba(var(--ai-color),0.25); padding:5px 6px; cursor:pointer; outline:none;"
+						>
+							{#each speech.availableVoices as v}
+								<option value={v.name}>{v.label} ({v.region})</option>
+							{/each}
+						</select>
+					</div>
+				</div>
+			</div>
+		</div>
+		{/if}
 
 		<!-- ── Model picker ─────────────────────────────────────────── -->
 		<div class="mb-4" style="border-top: 1px solid rgba(var(--ink),0.08); padding-top: 1.25rem;">
@@ -326,7 +427,9 @@
 			<button type="button" onclick={() => { showVoicePicker = !showVoicePicker; showModelPicker = false; }}
 				class="flex w-full items-center justify-between py-1 text-xs"
 				style="font-family: var(--font-mono); background: transparent; border: none; cursor: pointer;">
-				<span class="tracking-[0.25em] uppercase" style="color: rgba(var(--ink),0.70);">Voice</span>
+				<span class="tracking-[0.25em] uppercase" style="color: rgba(var(--ink),0.70);">
+					{selectedMode === 'ai-vs-ai' ? 'Narrator Voice' : 'AI Opponent Voice'}
+				</span>
 				<span class="flex items-center gap-2" style="color: rgba(var(--ink),0.65);">
 					<span>{selectedVoiceLabel}</span>
 					<svg width="10" height="6" viewBox="0 0 10 6" fill="none"
@@ -455,7 +558,7 @@
 			onmouseenter={(e) => { if (!canStart) return; const t = e.currentTarget as HTMLButtonElement; t.style.background = 'rgba(var(--user-color),0.13)'; t.style.borderColor = 'rgba(var(--user-color),0.55)'; }}
 			onmouseleave={(e) => { if (!canStart) return; const t = e.currentTarget as HTMLButtonElement; t.style.background = 'rgba(var(--user-color),0.08)'; t.style.borderColor = 'rgba(var(--user-color),0.38)'; }}
 		>
-			Enter the Arena
+			{selectedMode === 'ai-vs-ai' ? 'Watch the Debate' : 'Enter the Arena'}
 		</button>
 
 		<p class="mt-8 text-center text-xs leading-relaxed"

@@ -161,6 +161,80 @@ STRICT OUTPUT RULES:
 			return cleanOutput(full);
 		},
 
+		/**
+		 * Generate a turn for one AI in an AI-vs-AI debate.
+		 * Maps history so each AI sees its own past turns as 'assistant'
+		 * and the opponent's turns as 'user'.
+		 */
+		async generateAiVsAiTurn(
+			topic: string,
+			thisSide: DebateSide,
+			opponentSide: DebateSide,
+			thisSpeaker: 'ai1' | 'ai2',
+			history: Array<{ speaker: 'user' | 'ai' | 'ai1' | 'ai2'; text: string }>,
+			onToken: (token: string) => void
+		): Promise<string> {
+			if (!engine || !isReady) throw new Error('Engine not ready');
+			isGenerating = true;
+			try {
+
+			const sideLabel = (s: DebateSide) => (s === 'for' ? 'FOR' : 'AGAINST');
+			const isOpening = history.length === 0;
+
+			// Map history so each AI sees its own turns as 'assistant' and opponent's as 'user'.
+			// Chat APIs require the first message after system to be 'user', so if this AI
+			// spoke first (history starts with its own turn), prepend a synthetic user prompt.
+			const mappedHistory = history.map((t) => ({
+				role: (t.speaker === thisSpeaker ? 'assistant' : 'user') as 'user' | 'assistant',
+				content: trimTurn(t.text)
+			}));
+			if (mappedHistory.length > 0 && mappedHistory[0].role === 'assistant') {
+				mappedHistory.unshift({ role: 'user', content: 'Begin the debate.' });
+			}
+
+			const messages: webllm.ChatCompletionMessageParam[] = [
+				{
+					role: 'system',
+					content: `You are in a live debate. Topic: "${topic}".
+YOU argue: ${sideLabel(thisSide)}
+YOUR OPPONENT argues: ${sideLabel(opponentSide)}
+
+${isOpening
+	? 'Make a strong opening argument for your position. State your core claim and your strongest supporting reason.'
+	: `Directly challenge what your opponent just said. Find the weakness in their argument and attack it. Then reinforce your own position (${sideLabel(thisSide)}).`}
+
+STRICT OUTPUT RULES:
+- 2-3 sentences of plain prose. Nothing else.
+- Never agree with your opponent or validate their point.
+- No "Note:", no "I've generated", no meta-commentary, no greetings.
+- No bullet points, dashes, or asterisks.
+- Never say you are an AI. Stay in character as a debater.`
+				},
+				...mappedHistory
+			];
+
+			const stream = await engine.chat.completions.create({
+				messages,
+				stream: true,
+				temperature: 0.85,
+				max_tokens: 250
+			});
+
+			let full = '';
+			for await (const chunk of stream) {
+				const delta = chunk.choices[0]?.delta?.content ?? '';
+				if (delta) {
+					full += delta;
+					onToken(delta);
+				}
+			}
+
+			return cleanOutput(full);
+			} finally {
+				isGenerating = false;
+			}
+		},
+
 		async generateVerdict(
 			topic: string,
 			userSide: DebateSide,
@@ -206,6 +280,51 @@ STRICT OUTPUT RULES:
 				};
 			} catch {
 				return { verdict: 'A hard-fought debate with no clear winner.', winner: 'draw' };
+			}
+		},
+
+		async generateAiVsAiVerdict(
+			topic: string,
+			history: Array<{ speaker: 'user' | 'ai' | 'ai1' | 'ai2'; text: string }>
+		): Promise<{ verdict: string; winner: 'ai1' | 'ai2' | 'draw' }> {
+			if (!engine || !isReady) throw new Error('Engine not ready');
+			isGenerating = true;
+
+			const transcript = history
+				.map((t) => {
+					const label = t.speaker === 'ai1' ? 'AI 1 (FOR)' : 'AI 2 (AGAINST)';
+					return `${label}: ${trimTurn(t.text)}`;
+				})
+				.join('\n\n');
+
+			const messages: webllm.ChatCompletionMessageParam[] = [
+				{
+					role: 'system',
+					content: `You are an impartial debate judge. Respond ONLY in this JSON format: {"winner": "ai1" | "ai2" | "draw", "verdict": "2-3 sentence explanation"}`
+				},
+				{
+					role: 'user',
+					content: `Topic: "${topic}"\n\nAI 1 argues FOR. AI 2 argues AGAINST.\n\nTranscript:\n${transcript}\n\nWho made the stronger case?`
+				}
+			];
+
+			const response = await engine.chat.completions.create({
+				messages,
+				temperature: 0.3,
+				max_tokens: 150
+			});
+
+			isGenerating = false;
+
+			try {
+				const text = response.choices[0].message.content ?? '';
+				const json = JSON.parse(text.match(/\{.*\}/s)?.[0] ?? '{}');
+				return {
+					verdict: json.verdict ?? 'A closely matched debate.',
+					winner: json.winner ?? 'draw'
+				};
+			} catch {
+				return { verdict: 'An evenly matched exchange with no clear winner.', winner: 'draw' };
 			}
 		}
 	};

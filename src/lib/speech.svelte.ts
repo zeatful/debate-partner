@@ -1,40 +1,33 @@
-// Speech store: STT via Web Speech API, TTS via Kokoro-js
-// Kokoro is loaded lazily on first use to avoid blocking the LLM load
+// Speech store: STT and TTS via Web Speech API
 
 type SpeechStatus = 'idle' | 'listening' | 'processing' | 'speaking';
 
 export interface VoiceOption {
 	name: string;
 	lang: string;
-	region: string;   // 'US' | 'UK' | 'AU' | 'CA' | ...
+	region: string;
 	gender: 'female' | 'male' | 'unknown';
-	quality: 'premium' | 'standard'; // premium = neural/online/enhanced
+	quality: 'premium' | 'standard';
 	localService: boolean;
 	label: string;
 }
 
-// Silence duration (ms) after last speech before auto-submitting
 const SILENCE_TIMEOUT = 2000;
 
-/** Score a voice so we can pick the best default cross-platform */
 function scoreVoice(v: SpeechSynthesisVoice): number {
 	const n = v.name.toLowerCase();
-	// Tier 1 – known high-quality neural/online voices
 	if (n === 'google us english') return 100;
 	if (n === 'google uk english female') return 95;
 	if (n.includes('google') && n.includes('english')) return 90;
 	if (n.includes('google') && v.lang.startsWith('en')) return 85;
-	// macOS/iOS neural
 	if (n === 'samantha') return 80;
 	if (n === 'karen') return 78;
 	if (n === 'daniel') return 76;
 	if (n === 'moira') return 74;
-	// Windows neural
 	if (n.includes('microsoft') && n.includes('aria')) return 80;
 	if (n.includes('microsoft') && n.includes('jenny')) return 78;
 	if (n.includes('microsoft') && n.includes('guy')) return 76;
 	if (n.includes('microsoft') && v.lang.startsWith('en')) return 65;
-	// Any local English voice
 	if (v.lang === 'en-US' && v.localService) return 50;
 	if (v.lang.startsWith('en-') && v.localService) return 40;
 	if (v.lang.startsWith('en')) return 30;
@@ -60,7 +53,6 @@ function detectGender(v: SpeechSynthesisVoice): 'female' | 'male' | 'unknown' {
 		'arthur', 'rishi', 'aaron', 'reed', 'luca', 'evan', 'nathan'];
 	if (female.some((w) => n.includes(w))) return 'female';
 	if (male.some((w) => n.includes(w))) return 'male';
-	// Google voices encode gender in name
 	if (n.includes('english female') || n.includes('english woman')) return 'female';
 	if (n.includes('english male') || n.includes('english man')) return 'male';
 	return 'unknown';
@@ -68,9 +60,7 @@ function detectGender(v: SpeechSynthesisVoice): 'female' | 'male' | 'unknown' {
 
 function detectQuality(v: SpeechSynthesisVoice): 'premium' | 'standard' {
 	const n = v.name.toLowerCase();
-	// Online voices are always neural
 	if (!v.localService) return 'premium';
-	// Known enhanced/neural local voices
 	if (n.includes('enhanced') || n.includes('premium') || n.includes('neural')) return 'premium';
 	const premiumNames = ['samantha', 'daniel', 'karen', 'moira', 'fiona', 'serena',
 		'aria', 'jenny', 'guy', 'nicky', 'siri'];
@@ -79,35 +69,32 @@ function detectQuality(v: SpeechSynthesisVoice): 'premium' | 'standard' {
 }
 
 function makeLabel(v: SpeechSynthesisVoice): string {
-	const name = v.name.replace(/\s*\(.*?\)\s*$/, '').trim();
-	return name;
+	return v.name.replace(/\s*\(.*?\)\s*$/, '').trim();
 }
 
 function createSpeechStore() {
 	let status = $state<SpeechStatus>('idle');
 	let interimTranscript = $state('');
-	let kokoro = $state<unknown>(null);
-	let kokoroLoading = $state(false);
 
-	// Available English voices — populated by initVoices()
 	let availableVoices = $state<VoiceOption[]>([]);
+	// Narrator / AI opponent in human-vs-ai / fallback voice
 	let selectedVoiceName = $state<string>('');
+	// AI vs AI: separate voice names per debater
+	let ai1VoiceName = $state<string>('');
+	let ai2VoiceName = $state<string>('');
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	let recognition: any = null;
-	let audioCtx: AudioContext | null = null;
 	let ttsAbortController: AbortController | null = null;
 
-	function getAudioContext() {
-		if (!audioCtx) audioCtx = new AudioContext();
-		return audioCtx;
+	function getSortedEnglishVoices(): SpeechSynthesisVoice[] {
+		return speechSynthesis.getVoices()
+			.filter((v) => v.lang.startsWith('en'))
+			.sort((a, b) => scoreVoice(b) - scoreVoice(a));
 	}
 
 	function populateVoices() {
-		const all = speechSynthesis.getVoices();
-		const english = all
-			.filter((v) => v.lang.startsWith('en'))
-			.sort((a, b) => scoreVoice(b) - scoreVoice(a));
+		const english = getSortedEnglishVoices();
 
 		availableVoices = english.map((v) => ({
 			name: v.name,
@@ -119,75 +106,56 @@ function createSpeechStore() {
 			label: makeLabel(v)
 		}));
 
-		// Auto-select best if nothing chosen yet
 		if (!selectedVoiceName && availableVoices.length > 0) {
 			selectedVoiceName = availableVoices[0].name;
 		}
+		// Auto-assign AI vs AI voices to 1st and 2nd best distinct voices
+		if (!ai1VoiceName && availableVoices.length > 0) {
+			ai1VoiceName = availableVoices[0].name;
+		}
+		if (!ai2VoiceName && availableVoices.length > 1) {
+			ai2VoiceName = availableVoices[1].name;
+		}
 	}
 
-	function getSelectedVoice(): SpeechSynthesisVoice | null {
+	function resolveVoice(name?: string): SpeechSynthesisVoice | null {
 		const all = speechSynthesis.getVoices();
-		if (selectedVoiceName) {
-			const found = all.find((v) => v.name === selectedVoiceName);
+		const target = name ?? selectedVoiceName;
+		if (target) {
+			const found = all.find((v) => v.name === target);
 			if (found) return found;
 		}
-		// Fallback: pick highest-scoring
-		return all.filter((v) => v.lang.startsWith('en')).sort((a, b) => scoreVoice(b) - scoreVoice(a))[0] ?? null;
-	}
-
-	async function loadKokoro() {
-		if (kokoro || kokoroLoading) return;
-		kokoroLoading = true;
-		try {
-			const { KokoroTTS } = await import('kokoro-js');
-			kokoro = await KokoroTTS.from_pretrained('onnx-community/Kokoro-82M-v1.0', { dtype: 'q8' });
-		} catch (e) {
-			console.warn('Kokoro failed to load, using Web Speech API fallback:', e);
-		} finally {
-			kokoroLoading = false;
-		}
-	}
-
-	async function playAudioData(floatData: Float32Array<ArrayBuffer>, sampleRate: number) {
-		const ctx = getAudioContext();
-		const buffer = ctx.createBuffer(1, floatData.length, sampleRate);
-		buffer.copyToChannel(floatData, 0);
-		return new Promise<void>((resolve) => {
-			const source = ctx.createBufferSource();
-			source.buffer = buffer;
-			source.connect(ctx.destination);
-			source.onended = () => resolve();
-			source.start();
-		});
+		return getSortedEnglishVoices()[0] ?? null;
 	}
 
 	return {
 		get status() { return status; },
 		get interimTranscript() { return interimTranscript; },
-		get isKokoroReady() { return !!kokoro; },
-		get isKokoroLoading() { return kokoroLoading; },
 		get availableVoices() { return availableVoices; },
 		get selectedVoiceName() { return selectedVoiceName; },
+		get ai1VoiceName() { return ai1VoiceName; },
+		get ai2VoiceName() { return ai2VoiceName; },
 
-		/** Call once from setup page onMount to populate voice list */
 		initVoices() {
 			populateVoices();
-			// Chrome loads voices async — re-populate when ready
+			// Chrome loads voices async — keep retrying until we have them
 			if (availableVoices.length === 0) {
-				speechSynthesis.onvoiceschanged = () => {
-					populateVoices();
-					speechSynthesis.onvoiceschanged = null;
-				};
+				speechSynthesis.onvoiceschanged = () => populateVoices();
+				// Also poll as a fallback in case onvoiceschanged doesn't fire
+				const poll = setInterval(() => {
+					if (availableVoices.length > 0) {
+						clearInterval(poll);
+					} else {
+						populateVoices();
+					}
+				}, 100);
+				setTimeout(() => clearInterval(poll), 5000);
 			}
 		},
 
-		setVoice(name: string) {
-			selectedVoiceName = name;
-		},
-
-		async initKokoro() {
-			await loadKokoro();
-		},
+		setVoice(name: string) { selectedVoiceName = name; },
+		setAi1Voice(name: string) { ai1VoiceName = name; },
+		setAi2Voice(name: string) { ai2VoiceName = name; },
 
 		// STT: continuous recognition with 2s silence auto-submit
 		listen(): Promise<string> {
@@ -262,50 +230,34 @@ function createSpeechStore() {
 			interimTranscript = '';
 		},
 
-		// TTS: Kokoro if ready, otherwise selected Web Speech API voice
-		async speak(text: string): Promise<void> {
+		// TTS via Web Speech API. voiceName overrides the selected voice (used for AI vs AI).
+		async speak(text: string, voiceName?: string): Promise<void> {
 			this.stopSpeaking();
 			ttsAbortController = new AbortController();
 			const signal = ttsAbortController.signal;
 			status = 'speaking';
 
-			if (kokoro) {
-				const sentences = text.match(/[^.!?]+[.!?]+/g) ?? [text];
-				try {
-					for (const sentence of sentences) {
-						if (signal.aborted) break;
-						const trimmed = sentence.trim();
-						if (!trimmed) continue;
-						// eslint-disable-next-line @typescript-eslint/no-explicit-any
-						const output = await (kokoro as any).generate(trimmed, { voice: 'af_heart' });
-						if (signal.aborted) break;
-						await playAudioData(output.audio.data as Float32Array<ArrayBuffer>, output.audio.sampling_rate);
-					}
-				} catch { /* abort or error */ }
-			} else {
-				await new Promise<void>((resolve) => {
-					const utterance = new SpeechSynthesisUtterance(text);
-					utterance.rate = 0.92;
-					utterance.pitch = 1.0;
+			await new Promise<void>((resolve) => {
+				const utterance = new SpeechSynthesisUtterance(text);
+				utterance.rate = 0.92;
+				utterance.pitch = 1.0;
 
-					const voice = getSelectedVoice();
-					if (voice) {
-						utterance.voice = voice;
-					} else {
-						// Voices not yet loaded — wait once
-						speechSynthesis.onvoiceschanged = () => {
-							const v = getSelectedVoice();
-							if (v) utterance.voice = v;
-							speechSynthesis.onvoiceschanged = null;
-						};
-					}
+				const voice = resolveVoice(voiceName);
+				if (voice) {
+					utterance.voice = voice;
+				} else {
+					speechSynthesis.onvoiceschanged = () => {
+						const v = resolveVoice(voiceName);
+						if (v) utterance.voice = v;
+						speechSynthesis.onvoiceschanged = null;
+					};
+				}
 
-					utterance.onend = () => resolve();
-					utterance.onerror = () => resolve();
-					if (!signal.aborted) speechSynthesis.speak(utterance);
-					else resolve();
-				});
-			}
+				utterance.onend = () => resolve();
+				utterance.onerror = () => resolve();
+				if (!signal.aborted) speechSynthesis.speak(utterance);
+				else resolve();
+			});
 
 			if (!signal.aborted) status = 'idle';
 		},

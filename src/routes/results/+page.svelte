@@ -31,13 +31,17 @@
 							? `Congratulations! You win. ${debate.verdict}`
 							: debate.winner === 'ai'
 								? `The AI wins this debate. ${debate.verdict}`
-								: `It's a draw. ${debate.verdict}`;
+								: debate.winner === 'ai1'
+									? `AI 1 wins the debate. ${debate.verdict}`
+									: debate.winner === 'ai2'
+										? `AI 2 wins the debate. ${debate.verdict}`
+										: `It's a draw. ${debate.verdict}`;
 					await speech.speak(announcement);
 				}
 			}, 1000);
 		}, 200);
 
-		// Capture webcam photo if user wins
+		// Capture webcam photo only if human wins
 		if (debate.winner === 'user') {
 			capturePhoto();
 		}
@@ -73,15 +77,19 @@
 	}
 
 	const winnerColor = $derived(
-		debate.winner === 'user'
+		debate.winner === 'user' || debate.winner === 'ai1'
 			? 'rgba(var(--user-color),1)'
-			: debate.winner === 'ai'
+			: debate.winner === 'ai' || debate.winner === 'ai2'
 				? 'rgba(var(--ai-color),1)'
 				: 'rgba(var(--ink),0.5)'
 	);
 
 	const winnerLabel = $derived(
-		debate.winner === 'user' ? 'You Win' : debate.winner === 'ai' ? 'AI Wins' : 'Draw'
+		debate.winner === 'user' ? 'You Win' :
+		debate.winner === 'ai'   ? 'AI Wins' :
+		debate.winner === 'ai1'  ? 'AI 1 Wins' :
+		debate.winner === 'ai2'  ? 'AI 2 Wins' :
+		'Draw'
 	);
 
 	const winnerSublabel = $derived(
@@ -89,7 +97,11 @@
 			? 'Your arguments carried the day.'
 			: debate.winner === 'ai'
 				? 'The opponent proved the stronger case.'
-				: 'Honours are even.'
+				: debate.winner === 'ai1'
+					? 'The FOR side made the stronger case.'
+					: debate.winner === 'ai2'
+						? 'The AGAINST side made the stronger case.'
+						: 'Honours are even.'
 	);
 
 	function playAgain() {
@@ -142,7 +154,7 @@
 					</svg>
 				</div>
 
-				<!-- Avatar: webcam photo (user win) or robot (AI win) or generic (draw) -->
+				<!-- Avatar: webcam photo (user win) or robot (AI win / ai1 / ai2) or generic (draw) -->
 				{#if debate.winner === 'user'}
 					<div
 						class="overflow-hidden"
@@ -173,7 +185,7 @@
 							</div>
 						{/if}
 					</div>
-				{:else if debate.winner === 'ai'}
+				{:else if debate.winner === 'ai' || debate.winner === 'ai1' || debate.winner === 'ai2'}
 					<!-- Robot SVG -->
 					<div
 						style="
@@ -309,7 +321,9 @@
 			>
 				{#each [
 					{ label: 'Topic', value: `${debate.topic.slice(0, 30)}${debate.topic.length > 30 ? '…' : ''}` },
-					{ label: 'Your Side', value: debate.userSide === 'for' ? 'FOR' : 'AGAINST' },
+					debate.mode === 'ai-vs-ai'
+						? { label: 'Mode', value: 'AI vs AI' }
+						: { label: 'Your Side', value: debate.userSide === 'for' ? 'FOR' : 'AGAINST' },
 					{ label: 'Rounds', value: `${debate.roundNumber}` }
 				] as stat}
 					<div class="px-4 py-4" style="background: var(--canvas-bg);">

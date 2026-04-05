@@ -30,6 +30,9 @@
 
 <svelte:head>
 	<link rel="icon" href={favicon} />
+	<!-- Apply theme before first paint to prevent flash of wrong theme -->
+	<!-- eslint-disable-next-line svelte/no-inner-declarations -->
+	{@html `<script>(function(){try{var t=localStorage.getItem('theme');if(t==='light')document.documentElement.setAttribute('data-theme','light');}catch(e){}})();</script>`}
 	<link rel="preconnect" href="https://fonts.googleapis.com" />
 	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin="anonymous" />
 	<link

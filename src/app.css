@@ -41,6 +41,11 @@
 
 html {
   height: 100%;
+  background-color: #060606; /* prevents white flash before body paint — matches dark --canvas-bg */
+}
+
+html[data-theme="light"] {
+  background-color: #f2ede3;
 }
 
 body {

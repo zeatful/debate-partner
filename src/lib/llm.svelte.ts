@@ -9,16 +9,35 @@ export interface ModelOption {
 	recommended?: boolean;
 	mobileRecommended?: boolean;
 	mobileCompatible?: boolean;
+	/** Max number of history turns to include in context. Smaller models need fewer. */
+	maxHistoryTurns?: number;
 }
 
 export const AVAILABLE_MODELS: ModelOption[] = [
 	{
+		id: 'Qwen2.5-0.5B-Instruct-q4f16_1-MLC',
+		name: 'Qwen 2.5 · 0.5B',
+		size: '~400 MB',
+		description: 'Smallest download. Very basic arguments.',
+		mobileCompatible: true,
+		mobileRecommended: true,
+		maxHistoryTurns: 2
+	},
+	{
+		id: 'SmolLM2-1.7B-Instruct-q4f16_1-MLC',
+		name: 'SmolLM2 · 1.7B',
+		size: '~1 GB',
+		description: 'Good mobile balance of size and reasoning.',
+		mobileCompatible: true,
+		maxHistoryTurns: 4
+	},
+	{
 		id: 'Llama-3.2-3B-Instruct-q4f16_1-MLC',
 		name: 'Llama 3.2 · 3B',
 		size: '~2 GB',
-		description: 'Best option for mobile. Shorter, simpler arguments.',
+		description: 'Stronger arguments. May be unstable on mobile.',
 		mobileCompatible: true,
-		mobileRecommended: true
+		maxHistoryTurns: 6
 	},
 	{
 		id: 'Phi-3.5-mini-instruct-q4f16_1-MLC',
@@ -90,6 +109,17 @@ function createLLMStore() {
 			: (AVAILABLE_MODELS.find((m) => m.recommended)?.id ?? AVAILABLE_MODELS[0].id)
 	);
 
+	function currentModel() {
+		return AVAILABLE_MODELS.find((m) => m.id === selectedModelId) ?? AVAILABLE_MODELS[0];
+	}
+
+	/** Cap history to the model's context budget */
+	function limitHistory<T>(history: T[]): T[] {
+		const limit = currentModel().maxHistoryTurns;
+		if (!limit) return history;
+		return history.slice(-limit);
+	}
+
 	return {
 		get loadProgress() { return loadProgress; },
 		get loadStatus() { return loadStatus; },
@@ -97,7 +127,7 @@ function createLLMStore() {
 		get isReady() { return isReady; },
 		get isGenerating() { return isGenerating; },
 		get selectedModelId() { return selectedModelId; },
-		get selectedModel() { return AVAILABLE_MODELS.find((m) => m.id === selectedModelId) ?? AVAILABLE_MODELS[0]; },
+		get selectedModel() { return currentModel(); },
 
 		setModel(id: string) {
 			if (isLoading || isReady) return; // can't change mid-session
@@ -111,8 +141,11 @@ function createLLMStore() {
 			// and even when present on mobile the per-tab memory cap (~1–1.5 GB) will crash
 			// the renderer process before a 2+ GB model can load.
 			if (!('gpu' in navigator)) {
+				const isIos = /iPhone|iPad|iPod/.test(navigator.userAgent);
 				throw new Error(
-					'WebGPU is not available in this browser. Debate Partner requires a desktop browser — Chrome or Edge on a laptop or desktop computer.'
+					isIos
+						? 'WebGPU is not available. On iPhone/iPad use Safari — Chrome and other iOS browsers don\'t support WebGPU. If you\'re already in Safari, check Settings → Apps → Safari → Advanced → Feature Flags and enable WebGPU. iOS beta builds sometimes have it disabled.'
+						: 'WebGPU is not available in this browser. Debate Partner requires Chrome or Edge (desktop), or Safari on iPhone/iPad.'
 				);
 			}
 
@@ -138,6 +171,7 @@ function createLLMStore() {
 			isGenerating = true;
 
 			const sideLabel = (s: DebateSide) => (s === 'for' ? 'FOR' : 'AGAINST');
+			const recentHistory = limitHistory(history);
 
 			const messages: webllm.ChatCompletionMessageParam[] = [
 				{
@@ -155,7 +189,7 @@ STRICT OUTPUT RULES:
 - No bullet points, dashes, or asterisks.
 - Never say you are an AI. Stay in character as a debater.`
 				},
-				...history.map((t) => ({
+				...recentHistory.map((t) => ({
 					role: (t.speaker === 'user' ? 'user' : 'assistant') as 'user' | 'assistant',
 					content: trimTurn(t.text)
 				}))
@@ -165,7 +199,7 @@ STRICT OUTPUT RULES:
 				messages,
 				stream: true,
 				temperature: 0.8,
-				max_tokens: 250
+				max_tokens: 200
 			});
 
 			let full = '';
@@ -200,11 +234,12 @@ STRICT OUTPUT RULES:
 
 			const sideLabel = (s: DebateSide) => (s === 'for' ? 'FOR' : 'AGAINST');
 			const isOpening = history.length === 0;
+			const recentHistory = limitHistory(history);
 
 			// Map history so each AI sees its own turns as 'assistant' and opponent's as 'user'.
 			// Chat APIs require the first message after system to be 'user', so if this AI
 			// spoke first (history starts with its own turn), prepend a synthetic user prompt.
-			const mappedHistory = history.map((t) => ({
+			const mappedHistory = recentHistory.map((t) => ({
 				role: (t.speaker === thisSpeaker ? 'assistant' : 'user') as 'user' | 'assistant',
 				content: trimTurn(t.text)
 			}));
@@ -241,7 +276,7 @@ STRICT OUTPUT RULES:
 				messages,
 				stream: true,
 				temperature: 0.85,
-				max_tokens: 250
+				max_tokens: 200
 			});
 
 			let full = '';
@@ -269,42 +304,43 @@ STRICT OUTPUT RULES:
 			isGenerating = true;
 
 			const sideLabel = (s: DebateSide) => (s === 'for' ? 'FOR' : 'AGAINST');
-			const transcript = history
-				.map(
-					(t) =>
-						`${t.speaker === 'user' ? `Human (${sideLabel(userSide)})` : `AI (${sideLabel(aiSide)})`}: ${trimTurn(t.text)}`
-				)
+			const transcript = limitHistory(history)
+				.map((t) => `${t.speaker === 'user' ? `Human (${sideLabel(userSide)})` : `AI (${sideLabel(aiSide)})`}: ${trimTurn(t.text)}`)
 				.join('\n\n');
 
+			// Plain-text format — small models can't reliably produce JSON
 			const messages: webllm.ChatCompletionMessageParam[] = [
 				{
 					role: 'system',
-					content: `You are an impartial debate judge. Respond ONLY in this JSON format: {"winner": "user" | "ai" | "draw", "verdict": "2-3 sentence explanation"}`
+					content: `You are an impartial debate judge. Read the transcript and decide who argued more convincingly.
+Reply in EXACTLY this format — no other text:
+WINNER: human
+VERDICT: Your explanation here.
+
+Use "human", "ai", or "draw" for WINNER.`
 				},
 				{
 					role: 'user',
-					content: `Topic: "${topic}"\n\nTranscript:\n${transcript}\n\nWho won?`
+					content: `Topic: "${topic}"\n\nTranscript:\n${transcript}\n\nJudge the debate.`
 				}
 			];
 
 			const response = await engine.chat.completions.create({
 				messages,
 				temperature: 0.3,
-				max_tokens: 150
+				max_tokens: 200
 			});
 
 			isGenerating = false;
 
-			try {
-				const text = response.choices[0].message.content ?? '';
-				const json = JSON.parse(text.match(/\{.*\}/s)?.[0] ?? '{}');
-				return {
-					verdict: json.verdict ?? 'The debate was closely contested.',
-					winner: json.winner ?? 'draw'
-				};
-			} catch {
-				return { verdict: 'A hard-fought debate with no clear winner.', winner: 'draw' };
-			}
+			const text = response.choices[0].message.content ?? '';
+			const winnerMatch = text.match(/WINNER:\s*(human|ai|draw)/i);
+			const verdictMatch = text.match(/VERDICT:\s*(.+)/is);
+			const rawWinner = winnerMatch?.[1]?.toLowerCase() ?? '';
+			return {
+				verdict: verdictMatch?.[1]?.trim() || text.trim() || 'A hard-fought debate with no clear winner.',
+				winner: (rawWinner === 'human' ? 'user' : rawWinner === 'ai' ? 'ai' : 'draw') as 'user' | 'ai' | 'draw'
+			};
 		},
 
 		async generateAiVsAiVerdict(
@@ -314,42 +350,42 @@ STRICT OUTPUT RULES:
 			if (!engine || !isReady) throw new Error('Engine not ready');
 			isGenerating = true;
 
-			const transcript = history
-				.map((t) => {
-					const label = t.speaker === 'ai1' ? 'AI 1 (FOR)' : 'AI 2 (AGAINST)';
-					return `${label}: ${trimTurn(t.text)}`;
-				})
+			const transcript = limitHistory(history)
+				.map((t) => `${t.speaker === 'ai1' ? 'AI 1 (FOR)' : 'AI 2 (AGAINST)'}: ${trimTurn(t.text)}`)
 				.join('\n\n');
 
+			// Plain-text format — small models can't reliably produce JSON
 			const messages: webllm.ChatCompletionMessageParam[] = [
 				{
 					role: 'system',
-					content: `You are an impartial debate judge. Respond ONLY in this JSON format: {"winner": "ai1" | "ai2" | "draw", "verdict": "2-3 sentence explanation"}`
+					content: `You are an impartial debate judge. Read the transcript and decide who argued more convincingly.
+Reply in EXACTLY this format — no other text:
+WINNER: ai1
+VERDICT: Your explanation here.
+
+Use "ai1", "ai2", or "draw" for WINNER.`
 				},
 				{
 					role: 'user',
-					content: `Topic: "${topic}"\n\nAI 1 argues FOR. AI 2 argues AGAINST.\n\nTranscript:\n${transcript}\n\nWho made the stronger case?`
+					content: `Topic: "${topic}"\n\nAI 1 argues FOR. AI 2 argues AGAINST.\n\nTranscript:\n${transcript}\n\nJudge the debate.`
 				}
 			];
 
 			const response = await engine.chat.completions.create({
 				messages,
 				temperature: 0.3,
-				max_tokens: 150
+				max_tokens: 200
 			});
 
 			isGenerating = false;
 
-			try {
-				const text = response.choices[0].message.content ?? '';
-				const json = JSON.parse(text.match(/\{.*\}/s)?.[0] ?? '{}');
-				return {
-					verdict: json.verdict ?? 'A closely matched debate.',
-					winner: json.winner ?? 'draw'
-				};
-			} catch {
-				return { verdict: 'An evenly matched exchange with no clear winner.', winner: 'draw' };
-			}
+			const text = response.choices[0].message.content ?? '';
+			const winnerMatch = text.match(/WINNER:\s*(ai1|ai2|draw)/i);
+			const verdictMatch = text.match(/VERDICT:\s*(.+)/is);
+			return {
+				verdict: verdictMatch?.[1]?.trim() || text.trim() || 'An evenly matched exchange with no clear winner.',
+				winner: (winnerMatch?.[1]?.toLowerCase() ?? 'draw') as 'ai1' | 'ai2' | 'draw'
+			};
 		}
 	};
 }

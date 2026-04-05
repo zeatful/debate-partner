@@ -4,6 +4,7 @@
 	import { debate } from '$lib/debate.svelte.js';
 	import { llm } from '$lib/llm.svelte.js';
 	import { speech } from '$lib/speech.svelte.js';
+	import { isMobile } from '$lib/utils.js';
 	import LoadingScreen from '$lib/components/LoadingScreen.svelte';
 	import JudgingScreen from '$lib/components/JudgingScreen.svelte';
 	import VoiceButton from '$lib/components/VoiceButton.svelte';
@@ -18,6 +19,10 @@
 
 	// AI vs AI: stop-early flag
 	let stopRequested = $state(false);
+
+	// iOS requires a user gesture to unlock speechSynthesis. For AI vs AI the
+	// loop starts automatically, so we show a "tap to begin" overlay first.
+	let needsAudioUnlock = $state(false);
 
 	const isAiVsAi = $derived(debate.mode === 'ai-vs-ai');
 
@@ -47,7 +52,12 @@
 		llm.load().then(() => {
 			debate.setPhase('arguing');
 			if (isAiVsAi) {
-				runAiVsAiLoop();
+				if (isMobile()) {
+					// Can't start audio without a gesture on iOS — show tap-to-begin
+					needsAudioUnlock = true;
+				} else {
+					runAiVsAiLoop();
+				}
 			}
 		}).catch((err: Error) => {
 			errorMsg = err.message ?? 'Failed to load the AI model.';
@@ -117,6 +127,10 @@
 	}
 
 	function handleMicClick() {
+		// Unlock iOS Safari's speechSynthesis gate synchronously on the tap,
+		// before any async work consumes the user gesture token.
+		speech.unlockAudio();
+
 		if (speech.status === 'listening') {
 			speech.stopListening();
 			uiLocked = false;
@@ -208,6 +222,12 @@
 		speech.stopSpeaking();
 	}
 
+	function handleAudioUnlock() {
+		speech.unlockAudio();
+		needsAudioUnlock = false;
+		runAiVsAiLoop();
+	}
+
 	// ── Shared judging ─────────────────────────────────────────────────────────
 
 	async function finishDebate() {
@@ -234,9 +254,32 @@
 
 <!-- Loading overlay -->
 {#if debate.phase === 'loading'}
-	<LoadingScreen progress={llm.loadProgress} status={llm.loadStatus} label="Loading AI Model" error={errorMsg} oncancel={() => goto('/setup')} />
+	<LoadingScreen progress={llm.loadProgress} status={llm.loadStatus} label="Loading AI Model" modelSize={llm.selectedModel.size} error={errorMsg} oncancel={() => goto('/setup')} />
 {:else if debate.phase === 'judging' && !debate.verdict}
 	<JudgingScreen />
+{/if}
+
+<!-- iOS audio unlock overlay for AI vs AI -->
+{#if needsAudioUnlock}
+	<div class="fixed inset-0 z-40 flex flex-col items-center justify-center"
+		style="background: var(--canvas-bg);">
+		<div class="flex flex-col items-center gap-6 px-8 text-center">
+			<p class="text-xs tracking-[0.3em] uppercase" style="color: rgba(var(--user-color),0.65); font-family: var(--font-mono);">
+				Ready
+			</p>
+			<h2 class="text-4xl font-light italic" style="font-family: var(--font-display); color: rgba(var(--ink),0.90);">
+				Tap to begin
+			</h2>
+			<p class="max-w-xs text-xs leading-relaxed" style="color: rgba(var(--ink),0.50); font-family: var(--font-mono);">
+				iOS requires a tap to enable audio before the debate starts.
+			</p>
+			<button type="button" onclick={handleAudioUnlock}
+				class="mt-2 px-8 py-3 text-xs tracking-[0.3em] uppercase transition-all duration-200"
+				style="font-family: var(--font-mono); background: rgba(var(--user-color),0.08); color: rgba(var(--user-color),1); border: 1px solid rgba(var(--user-color),0.38);">
+				Begin Debate
+			</button>
+		</div>
+	</div>
 {/if}
 
 <div class="flex h-screen flex-col" style="background: var(--canvas-bg);">

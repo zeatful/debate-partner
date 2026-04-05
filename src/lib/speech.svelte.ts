@@ -267,6 +267,15 @@ function createSpeechStore() {
 			ttsAbortController = null;
 			speechSynthesis.cancel();
 			status = 'idle';
+		},
+
+		// iOS Safari requires speechSynthesis to be "unlocked" via a direct user
+		// gesture. Call this synchronously inside any click/tap handler before
+		// any async work, so that later speak() calls are permitted.
+		unlockAudio() {
+			const u = new SpeechSynthesisUtterance('');
+			speechSynthesis.speak(u);
+			speechSynthesis.cancel();
 		}
 	};
 }

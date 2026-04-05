@@ -83,6 +83,9 @@
 
 	function start() {
 		if (!canStart) return;
+		// Unlock iOS Safari audio gate synchronously on this tap gesture,
+		// so speech.speak() works later without a user gesture.
+		speech.unlockAudio();
 		if (selectedMode === 'ai-vs-ai') {
 			debate.startAiVsAiDebate(topic.trim());
 		} else {
@@ -153,7 +156,8 @@
 					<li style="display: flex; gap: 0.5rem;"><span style="color: rgba(var(--user-color),0.7);">·</span> <span>Even supported models may be unstable on some devices or browser versions.</span></li>
 				</ul>
 				<p class="mt-1" style="color: rgba(var(--ink),0.50);">
-					For the best experience, open this on a desktop or laptop with Chrome or Edge.
+					On iPhone/iPad, use <strong style="color: rgba(var(--ink),0.70);">Safari</strong> — Chrome and other iOS browsers don't support WebGPU.
+					For the best experience overall, open this on a desktop or laptop with Chrome or Edge.
 				</p>
 			</div>
 		{:else if webGpuUnsupported}

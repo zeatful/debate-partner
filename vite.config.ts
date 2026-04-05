@@ -1,9 +1,10 @@
 import tailwindcss from '@tailwindcss/vite';
 import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
+import mkcert from 'vite-plugin-mkcert';
 
 export default defineConfig({
-	plugins: [tailwindcss(), sveltekit()],
+	plugins: [tailwindcss(), sveltekit(), mkcert()],
 	optimizeDeps: {
 		exclude: ['@mlc-ai/web-llm', 'kokoro-js']
 	},
@@ -12,6 +13,7 @@ export default defineConfig({
 		chunkSizeWarningLimit: 25000
 	},
 	server: {
+		host: true,
 		headers: {
 			'Cross-Origin-Embedder-Policy': 'require-corp',
 			'Cross-Origin-Opener-Policy': 'same-origin'

@@ -3,11 +3,12 @@
 		progress?: number;
 		status?: string;
 		label?: string;
+		modelSize?: string;
 		error?: string;
 		oncancel?: () => void;
 	}
 
-	let { progress = 0, status = '', label = 'Preparing', error = '', oncancel }: Props = $props();
+	let { progress = 0, status = '', label = 'Preparing', modelSize = '~2 GB', error = '', oncancel }: Props = $props();
 
 	const clampedProgress = $derived(Math.max(0, Math.min(100, progress)));
 	const isIndeterminate = $derived(clampedProgress === 0);
@@ -217,7 +218,7 @@
 			</div>
 		{:else if clampedProgress < 10}
 			<p class="text-center text-xs" style="color: rgba(var(--ink),0.38); font-family: var(--font-mono);">
-				First load downloads ~2 GB · cached after that
+				First load downloads {modelSize} · cached after that
 			</p>
 		{/if}
 	</div>

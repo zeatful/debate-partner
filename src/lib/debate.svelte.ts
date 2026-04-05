@@ -45,7 +45,7 @@ function createDebateStore() {
 	let mode = $state<DebateMode>(saved?.mode ?? 'human-vs-ai');
 	let userSide = $state<DebateSide>(saved?.userSide ?? 'for');
 	let aiSide = $state<DebateSide>(saved?.aiSide ?? 'against');
-	let phase = $state<DebatePhase>(saved?.topic ? 'loading' : 'setup');
+	let phase = $state<DebatePhase>('setup');
 	let turns = $state<Turn[]>([]);
 	let roundNumber = $state(0);
 	const maxRounds = 4;

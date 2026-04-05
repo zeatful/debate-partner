@@ -188,7 +188,11 @@ STRICT OUTPUT RULES:
 				role: (t.speaker === thisSpeaker ? 'assistant' : 'user') as 'user' | 'assistant',
 				content: trimTurn(t.text)
 			}));
-			if (mappedHistory.length > 0 && mappedHistory[0].role === 'assistant') {
+			// Ensure history starts and ends with a user turn (API requirement)
+			if (mappedHistory.length === 0 || mappedHistory[mappedHistory.length - 1].role === 'assistant') {
+				mappedHistory.push({ role: 'user', content: isOpening ? 'Begin the debate.' : 'Continue.' });
+			}
+			if (mappedHistory[0].role === 'assistant') {
 				mappedHistory.unshift({ role: 'user', content: 'Begin the debate.' });
 			}
 

@@ -231,7 +231,7 @@
 
 <!-- Loading overlay -->
 {#if debate.phase === 'loading'}
-	<LoadingScreen progress={llm.loadProgress} status={llm.loadStatus} label="Loading Model" />
+	<LoadingScreen progress={llm.loadProgress} status={llm.loadStatus} label="Loading AI Model" oncancel={() => goto('/setup')} />
 {:else if debate.phase === 'judging' && !debate.verdict}
 	<JudgingScreen />
 {/if}
@@ -303,11 +303,11 @@
 					{#if isAiVsAi}
 						<p class="text-2xl font-light italic"
 							style="font-family: var(--font-display); color: rgba(var(--ink),0.70);">
-							Preparing the debate
+							Generating opening argument
 						</p>
 						<p class="mt-3 text-xs tracking-widest uppercase"
 							style="color: rgba(var(--ink),0.55); font-family: var(--font-mono);">
-							The AIs will begin shortly
+							AI 1 is preparing its case…
 						</p>
 					{:else}
 						<p class="text-2xl font-light italic"

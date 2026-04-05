@@ -3,11 +3,13 @@
 		progress?: number;
 		status?: string;
 		label?: string;
+		oncancel?: () => void;
 	}
 
-	let { progress = 0, status = '', label = 'Preparing' }: Props = $props();
+	let { progress = 0, status = '', label = 'Preparing', oncancel }: Props = $props();
 
 	const clampedProgress = $derived(Math.max(0, Math.min(100, progress)));
+	const isIndeterminate = $derived(clampedProgress === 0);
 </script>
 
 <div
@@ -165,20 +167,33 @@
 		<!-- ── Progress bar ───────────────────────────────────────────── -->
 		<div class="w-full">
 			<div class="h-px w-full overflow-hidden" style="background: rgba(var(--ink),0.08);">
-				<div
-					class="h-full transition-all duration-300 ease-out"
-					style="
-						width: {clampedProgress}%;
-						background: linear-gradient(90deg, rgba(var(--user-color),0.4) 0%, rgba(var(--user-color),1) 50%, rgba(var(--user-color),0.4) 100%);
-						background-size: 200% 100%;
-						animation: {clampedProgress > 0 && clampedProgress < 100 ? 'progress-shine 1.8s linear infinite' : 'none'};
-					"
-				></div>
+				{#if isIndeterminate}
+					<!-- Pulsing sweep when no progress yet -->
+					<div class="indeterminate-bar h-full" style="background: rgba(var(--user-color),0.7);"></div>
+				{:else}
+					<div
+						class="h-full transition-all duration-300 ease-out"
+						style="
+							width: {clampedProgress}%;
+							background: linear-gradient(90deg, rgba(var(--user-color),0.4) 0%, rgba(var(--user-color),1) 50%, rgba(var(--user-color),0.4) 100%);
+							background-size: 200% 100%;
+							animation: {clampedProgress < 100 ? 'progress-shine 1.8s linear infinite' : 'none'};
+						"
+					></div>
+				{/if}
 			</div>
-			<div class="mt-3">
+			<div class="mt-3 flex items-center justify-between">
 				<span class="text-xs tabular-nums" style="color: rgba(var(--ink),0.60); font-family: var(--font-mono);">
-					{Math.round(clampedProgress)}%
+					{isIndeterminate ? 'Starting up…' : `${Math.round(clampedProgress)}%`}
 				</span>
+				{#if oncancel}
+					<button type="button" onclick={oncancel}
+						class="text-xs transition-colors duration-150"
+						style="font-family: var(--font-mono); color: rgba(var(--ink),0.35); background: none; border: none; cursor: pointer;"
+						onmouseenter={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'rgba(var(--ink),0.65)'; }}
+						onmouseleave={(e) => { (e.currentTarget as HTMLButtonElement).style.color = 'rgba(var(--ink),0.35)'; }}
+					>← back to setup</button>
+				{/if}
 			</div>
 		</div>
 
@@ -187,12 +202,12 @@
 			class="max-w-xs text-center text-xs leading-relaxed"
 			style="color: rgba(var(--ink),0.62); font-family: var(--font-mono); min-height: 2rem;"
 		>
-			{status || 'Initializing...'}
+			{isIndeterminate ? 'Initializing WebGPU runtime…' : (status || 'Loading…')}
 		</p>
 
 		{#if clampedProgress < 10}
-			<p class="text-center text-xs" style="color: rgba(var(--ink),0.45); font-family: var(--font-mono);">
-				First load downloads ~2GB. Cached after that.
+			<p class="text-center text-xs" style="color: rgba(var(--ink),0.38); font-family: var(--font-mono);">
+				First load downloads ~2 GB · cached after that
 			</p>
 		{/if}
 	</div>
@@ -215,6 +230,16 @@
 	 *   Reactor: same as eyes
 	 *   Antenna: pulses once online (72%+)
 	 */
+
+	/* ── Indeterminate progress bar ─────────────────────────────── */
+	.indeterminate-bar {
+		width: 40%;
+		animation: indeterminate-sweep 1.6s ease-in-out infinite;
+	}
+	@keyframes indeterminate-sweep {
+		0%   { transform: translateX(-150%); }
+		100% { transform: translateX(350%); }
+	}
 
 	/* ── Shared reset ────────────────────────────────────────────── */
 	.part-feet,
